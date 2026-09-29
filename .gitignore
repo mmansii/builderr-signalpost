@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 out/
 .env
+
+data/*.csv
+data/*.csv.gz
+data/*universe*.jsonl
+data/test-batch-*.jsonl
