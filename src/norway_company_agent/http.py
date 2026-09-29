@@ -27,7 +27,7 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def fetch_json(url: str, *, timeout: float = 20.0, attempts: int = 3) -> FetchResult:
+def fetch_json(url: str, *, timeout: float = 20.0, attempts: int = 5) -> FetchResult:
     last_error = "request failed"
     for attempt in range(attempts):
         started = time.monotonic()
@@ -47,7 +47,7 @@ def fetch_json(url: str, *, timeout: float = 20.0, attempts: int = 3) -> FetchRe
                 return FetchResult(url, exc.code, elapsed, len(raw), error=f"HTTP {exc.code}", content_sha256=hashlib.sha256(raw).hexdigest(), retrieved_at=_utc_now())
             last_error = f"HTTP {exc.code}"
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            last_error = type(exc).__name__
+            last_error = f"{type(exc).__name__}: {exc}"
         if attempt + 1 < attempts:
             time.sleep(0.4 * (2**attempt))
     return FetchResult(url, 0, 0, 0, error=last_error, retrieved_at=_utc_now())
