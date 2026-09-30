@@ -38,6 +38,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--checkpoint-every", type=int, default=25)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--workforce-output")
     parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website")
     args = parser.parse_args()
 
@@ -56,9 +57,26 @@ def main() -> None:
     fetch_modules = set(requested_modules) - {"registry", "accounting_obligation", "website"}
     operations = {"requests": 0, "bytes": 0, "latencies_ms": []}
 
+    workforce_map = {}
+    if args.workforce_output and Path(args.workforce_output).exists():
+        workforce_map = {
+            str(row["organisation_number"]): row
+            for row in (
+                json.loads(line)
+                for line in Path(args.workforce_output).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
+        }
+
     def enrich(profile: dict) -> tuple[dict, dict]:
         records, metrics = fetch_official_modules(profile["organisation_number"], fetch_modules)
         profile["evidence"].update(records)
+        workforce = workforce_map.get(str(profile["organisation_number"]))
+        if workforce:
+         profile["evidence"]["workforce_annual_report"] = {
+                "status": "available",
+                "value": workforce,
+            }
         website_metrics = {"requests": 0, "bytes": 0, "latencies_ms": []}
         if "website" in requested_modules:
             website_record, website_metrics = fetch_website(profile.get("website"))
