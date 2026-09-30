@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import subprocess
+import shutil
+import tempfile
 import argparse
 import hashlib
 import io
@@ -120,7 +123,9 @@ def ocr_pdf(pdf_path: Path, *, pages: int, dpi: int) -> str:
                 ["tesseract", str(image_path), "stdout", "-l", "eng", "--psm", "6"],
                 check=True,
                 capture_output=True,
-                text=True,
+               text=True,
+               encoding="utf-8",
+               errors="replace",
                 timeout=60,
             )
             text.append(completed.stdout)
@@ -157,19 +162,28 @@ def collect(profile: dict, cache_dir: Path, *, ocr_pages: int, ocr_dpi: int) -> 
             pages.append(page.extract_text() or "")
         text = "\n".join(pages)
         ocr_used = False
+    
         ocr_cache_path = cache_dir / f"{org}-{latest['year']}-ocr-{ocr_pages}-{ocr_dpi}.txt"
-        if needs_ocr(text) and ocr_pages > 0:
+        if needs_ocr(text) and ocr_pages > 0 and shutil.which("pdftoppm") and shutil.which("tesseract"):
             if ocr_cache_path.exists():
                 ocr_text = ocr_cache_path.read_text(encoding="utf-8", errors="replace")
             else:
                 ocr_text = ocr_pdf(cache_path, pages=min(ocr_pages, len(reader.pages)), dpi=ocr_dpi)
                 ocr_cache_path.write_text(ocr_text, encoding="utf-8")
+
             # Preserve the exact organisation number from the digital cover
             # while adding the OCR-only notes used for workforce extraction.
             text = text + "\n" + ocr_text
             ocr_used = True
+
         if org not in re.sub(r"\D", "", text):
-            return None, {"organisation_number": org, "status": "organisation_number_not_in_pdf", "cache_hit": cache_hit, "ocr_used": ocr_used}
+            return None, {
+                "organisation_number": org,
+                "status": "organisation_number_not_in_pdf",
+                "cache_hit": cache_hit,
+                "ocr_used": ocr_used,
+            }
+
         count, span, status, measure = extract_candidate(text)
         if count is None:
             return None, {"organisation_number": org, "status": status, "cache_hit": cache_hit, "pages": len(reader.pages), "ocr_used": ocr_used}
